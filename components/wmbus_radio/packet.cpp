@@ -31,6 +31,7 @@ LinkMode Packet::link_mode() {
 }
 
 void Packet::set_rssi(int8_t rssi) { this->rssi_ = rssi; }
+void Packet::set_frequency_hz(uint32_t frequency_hz) { this->frequency_hz_ = frequency_hz; }
 
 // Get value of L-field
 uint8_t Packet::l_field() {
@@ -94,8 +95,11 @@ bool Packet::calculate_payload_size() {
 std::optional<Frame> Packet::convert_to_frame() {
   std::optional<Frame> frame = {};
 
-  ESP_LOGD(TAG, "Have data from radio (%zu bytes)", this->data_.size());
-  debugPayload("raw packet", this->data_);
+  if (this->data_.size() > 10) {
+    ESP_LOGD(TAG, "Have data from radio (%zu bytes) [frequency: %.6f MHz]",
+             this->data_.size(), this->frequency_hz_ / 1e6f);
+    debugPayload("raw packet", this->data_);
+  }
 
   if (this->expected_size() == this->data_.size()) {
     if (this->link_mode() == LinkMode::T1) {
@@ -139,11 +143,13 @@ std::optional<Frame> Packet::convert_to_frame() {
 
 Frame::Frame(Packet *packet)
     : data_(std::move(packet->data_)), link_mode_(packet->link_mode_),
-      rssi_(packet->rssi_), format_(packet->frame_format_) {}
+      rssi_(packet->rssi_), frequency_hz_(packet->frequency_hz_),
+      format_(packet->frame_format_) {}
 
 std::vector<uint8_t> &Frame::data() { return this->data_; }
 LinkMode Frame::link_mode() { return this->link_mode_; }
 int8_t Frame::rssi() { return this->rssi_; }
+uint32_t Frame::frequency_hz() { return this->frequency_hz_; }
 std::string Frame::format() { return this->format_; }
 
 std::vector<uint8_t> Frame::as_raw() { return this->data_; }

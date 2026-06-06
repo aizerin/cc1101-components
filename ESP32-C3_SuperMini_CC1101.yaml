@@ -73,6 +73,12 @@ wmbus_radio:
   cs_pin: GPIO4
   irq_pin: GPIO3
   # frequency: 868.95MHz   # Optional. Range: 300–928 MHz. Default: 868.95 MHz
+  # Optional runtime sweep for CC1101 frequency calibration:
+  # frequency_sweep:
+  #   start: 868.940MHz
+  #   end: 868.960MHz
+  #   step: 5Hz
+  #   interval: 2h
   on_frame:
     - then:
         - logger.log:

@@ -166,6 +166,7 @@ public:
   bool read_in_task(uint8_t *buffer, size_t length, uint32_t offset) override;
   gpio::InterruptType get_interrupt_type() override { return gpio::INTERRUPT_FALLING_EDGE; }
   void restart_rx() override;
+  void retune_frequency_hz(uint32_t hz) override;
   int8_t get_rssi() override;
   const char *get_name() override;
 
@@ -180,6 +181,7 @@ protected:
   void write_burst(uint8_t address, const uint8_t *data, size_t length);
   void read_burst(uint8_t address, uint8_t *data, size_t length);
   uint8_t get_rx_bytes();
+  void write_frequency_registers();
 
   int8_t last_rssi_{0};
 };

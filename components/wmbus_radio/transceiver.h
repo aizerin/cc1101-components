@@ -44,6 +44,7 @@ public:
   virtual void restart_rx() = 0;
   virtual int8_t get_rssi() = 0;
   virtual const char *get_name() = 0;
+  virtual void retune_frequency_hz(uint32_t hz);
 
   // Frame-based reading interface
   // Returns number of bytes read (0 if no data available yet)
@@ -58,6 +59,7 @@ public:
   void set_irq_pin(InternalGPIOPin *irq_pin);
   void set_busy_pin(GPIOPin *busy_pin);
   void set_frequency_hz(uint32_t hz);
+  uint32_t get_frequency_hz() const { return this->frequency_hz_; }
   void set_rx_gain_mode(const std::string &mode);
   void set_rf_switch(bool enable);
   void set_sync_mode(const std::string &mode);

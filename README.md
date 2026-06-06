@@ -206,6 +206,11 @@ wmbus_radio:
   cs_pin: GPIO4
   irq_pin: GPIO3
   frequency: 868.95MHz   # Optional. Range: 300–928 MHz. Default: 868.95 MHz
+  frequency_sweep:
+    start: 868.940MHz
+    end: 868.960MHz
+    step: 5Hz
+    interval: 2h
 ```
 
 | Option | Required | Default | Description |
@@ -214,6 +219,7 @@ wmbus_radio:
 | `cs_pin` | yes | — | SPI chip select pin |
 | `irq_pin` | yes | — | Interrupt pin (GDO0) |
 | `frequency` | no | `868.95MHz` | Operating frequency, 300–928 MHz |
+| `frequency_sweep` | no | — | Runtime frequency sweep. Starts at `start`, retunes by `step` every `interval`, wraps at `end`. |
 
 Tested on ESP32-C3 Super Mini + CC1101 v2.0 (E07-M1101D-SMA) blue board.
 

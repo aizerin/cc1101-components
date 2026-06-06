@@ -38,6 +38,11 @@ void RadioTransceiver::set_frequency_hz(uint32_t hz) {
   this->frequency_hz_ = hz;
 }
 
+void RadioTransceiver::retune_frequency_hz(uint32_t hz) {
+  this->frequency_hz_ = hz;
+  this->restart_rx();
+}
+
 void RadioTransceiver::set_rx_gain_mode(const std::string &mode) {
   if (mode == "RX_GAIN_BOOSTED") {
     this->rx_gain_mode_ = RX_GAIN_BOOSTED;

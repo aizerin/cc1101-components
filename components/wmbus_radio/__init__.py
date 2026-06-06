@@ -32,6 +32,11 @@ CONF_RX_GAIN = "rx_gain"
 CONF_RF_SWITCH = "rf_switch"
 CONF_SYNC_MODE = "sync_mode"
 CONF_HAS_TCXO = "has_tcxo"
+CONF_FREQUENCY_SWEEP = "frequency_sweep"
+CONF_START = "start"
+CONF_END = "end"
+CONF_STEP = "step"
+CONF_INTERVAL = "interval"
 
 radio_ns = cg.esphome_ns.namespace("wmbus_radio")
 RadioComponent = radio_ns.class_("Radio", cg.Component)
@@ -67,6 +72,23 @@ SYNC_MODE_OPTIONS = {
     "ULTRA_LOW_LATENCY": "SYNC_MODE_ULTRA_LOW_LATENCY",
 }
 
+FREQUENCY_RANGE = cv.All(
+    cv.frequency,
+    cv.Range(min=300e6, max=928e6),
+)
+
+FREQUENCY_SWEEP_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_START): FREQUENCY_RANGE,
+        cv.Required(CONF_END): FREQUENCY_RANGE,
+        cv.Required(CONF_STEP): cv.All(
+            cv.frequency,
+            cv.Range(min=1),
+        ),
+        cv.Optional(CONF_INTERVAL, default="2h"): cv.positive_time_period_milliseconds,
+    }
+)
+
 def FILTER_SOURCE_FILES():
     """Return set of transceiver source files to exclude from compilation."""
     exclude = set()
@@ -89,10 +111,8 @@ CONFIG_SCHEMA = (
             # Optional BUSY pin for SX1262
             cv.Optional(CONF_BUSY_PIN): pins.gpio_input_pin_schema,
             # Operating frequency (CC1101 only). Range: 300–928 MHz. Default: 868.95 MHz
-            cv.Optional(CONF_FREQUENCY, default="868.95MHz"): cv.All(
-                cv.frequency,
-                cv.Range(min=300e6, max=928e6),
-            ),
+            cv.Optional(CONF_FREQUENCY, default="868.95MHz"): FREQUENCY_RANGE,
+            cv.Optional(CONF_FREQUENCY_SWEEP): FREQUENCY_SWEEP_SCHEMA,
             # Optional RX gain mode for SX1262 (default: BOOSTED for better sensitivity)
             cv.Optional(CONF_RX_GAIN, default="BOOSTED"): cv.one_of(
                 *RX_GAIN_OPTIONS, upper=True
@@ -139,7 +159,10 @@ async def to_code(config):
         cg.add(radio_var.set_busy_pin(busy_pin))
 
     # Operating frequency
-    cg.add(radio_var.set_frequency_hz(int(config[CONF_FREQUENCY])))
+    initial_frequency = config[CONF_FREQUENCY]
+    if CONF_FREQUENCY_SWEEP in config:
+        initial_frequency = config[CONF_FREQUENCY_SWEEP][CONF_START]
+    cg.add(radio_var.set_frequency_hz(int(initial_frequency)))
 
     # RX gain mode
     cg.add(radio_var.set_rx_gain_mode(RX_GAIN_OPTIONS[config[CONF_RX_GAIN]]))
@@ -159,6 +182,16 @@ async def to_code(config):
     cg.add(cg.LineComment("WMBus Component"))
     var = cg.new_Pvariable(config[CONF_ID])
     cg.add(var.set_radio(radio_var))
+    if CONF_FREQUENCY_SWEEP in config:
+        sweep = config[CONF_FREQUENCY_SWEEP]
+        cg.add(
+            var.set_frequency_sweep(
+                int(sweep[CONF_START]),
+                int(sweep[CONF_END]),
+                int(sweep[CONF_STEP]),
+                sweep[CONF_INTERVAL].total_milliseconds,
+            )
+        )
 
     await cg.register_component(var, config)
 

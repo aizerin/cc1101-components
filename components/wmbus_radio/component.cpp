@@ -21,6 +21,7 @@ static const char *TAG = "wmbus";
 
 void Radio::setup() {
   ASSERT_SETUP(this->packet_queue_ = xQueueCreate(3, sizeof(Packet *)));
+  this->last_sweep_ms_ = millis();
 
   // High priority to avoid FIFO overflow (fills in 5.12ms at 100kbps).
   // Pin to core 1 on dual-core to avoid WiFi ISR preemption on core 0.
@@ -39,6 +40,26 @@ void Radio::setup() {
 }
 
 void Radio::loop() {
+  if (this->frequency_sweep_enabled_ && this->sweep_interval_ms_ > 0 &&
+      millis() - this->last_sweep_ms_ >= this->sweep_interval_ms_) {
+    this->last_sweep_ms_ = millis();
+
+    uint32_t next = this->sweep_current_hz_;
+    if (this->sweep_start_hz_ <= this->sweep_end_hz_) {
+      next = this->sweep_current_hz_ + this->sweep_step_hz_;
+      if (next > this->sweep_end_hz_ || next < this->sweep_current_hz_)
+        next = this->sweep_start_hz_;
+    } else {
+      next = this->sweep_current_hz_ - this->sweep_step_hz_;
+      if (next < this->sweep_end_hz_ || next > this->sweep_current_hz_)
+        next = this->sweep_start_hz_;
+    }
+
+    this->sweep_current_hz_ = next;
+    this->pending_frequency_hz_ = next;
+    xTaskNotifyGive(this->receiver_task_handle_);
+  }
+
   Packet *p;
   if (xQueueReceive(this->packet_queue_, &p, 0) != pdPASS)
     return;
@@ -51,9 +72,9 @@ void Radio::loop() {
   if (!frame)
     return;
 
-  ESP_LOGV(TAG, "Have data (%zu bytes) [RSSI: %ddBm, mode: %s %s]",
-           frame->data().size(), frame->rssi(), toString(frame->link_mode()),
-           frame->format().c_str());
+  ESP_LOGV(TAG, "Have data (%zu bytes) [RSSI: %ddBm, frequency: %.6f MHz, mode: %s %s]",
+           frame->data().size(), frame->rssi(), frame->frequency_hz() / 1e6f,
+           toString(frame->link_mode()), frame->format().c_str());
 
   uint8_t packet_handled = 0;
   for (auto &handler : this->handlers_)
@@ -76,6 +97,27 @@ void Radio::loop() {
   }
 }
 
+void Radio::set_frequency_sweep(uint32_t start_hz, uint32_t end_hz, uint32_t step_hz,
+                                uint32_t interval_ms) {
+  this->frequency_sweep_enabled_ = true;
+  this->sweep_start_hz_ = start_hz;
+  this->sweep_end_hz_ = end_hz;
+  this->sweep_step_hz_ = step_hz;
+  this->sweep_interval_ms_ = interval_ms;
+  this->sweep_current_hz_ = start_hz;
+}
+
+bool Radio::apply_pending_frequency_change() {
+  uint32_t hz = this->pending_frequency_hz_;
+  if (hz == 0)
+    return false;
+
+  this->pending_frequency_hz_ = 0;
+  ESP_LOGI(TAG, "Frequency sweep retune to %.6f MHz", hz / 1e6f);
+  this->radio->retune_frequency_hz(hz);
+  return true;
+}
+
 void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg) {
   BaseType_t xHigherPriorityTaskWoken;
   vTaskNotifyGiveFromISR(*arg, &xHigherPriorityTaskWoken);
@@ -83,10 +125,15 @@ void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg) {
 }
 
 void Radio::receive_frame() {
+  this->apply_pending_frequency_change();
+
   if (!ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(60000))) {
     this->radio->restart_rx();
     return;
   }
+
+  if (this->apply_pending_frequency_change())
+    return;
 
   auto packet = std::make_unique<Packet>();
 
@@ -106,6 +153,7 @@ void Radio::receive_frame() {
   }
 
   packet->set_rssi(this->radio->get_rssi());
+  packet->set_frequency_hz(this->radio->get_frequency_hz());
 
   // Re-arm sync word detector for next packet
   this->radio->restart_rx();

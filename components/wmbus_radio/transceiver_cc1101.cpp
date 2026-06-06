@@ -67,11 +67,7 @@ void CC1101::setup() {
   this->write_register(CC1101_FSCTRL0, 0x00);
 
   ESP_LOGVV(TAG, "setting radio frequency");
-  // FREQ = (f_carrier * 2^16) / f_xtal
-  uint32_t freq_reg = ((uint64_t)this->frequency_hz_ << 16) / F_XTAL;
-  this->write_register(CC1101_FREQ2, BYTE(freq_reg, 2));
-  this->write_register(CC1101_FREQ1, BYTE(freq_reg, 1));
-  this->write_register(CC1101_FREQ0, BYTE(freq_reg, 0));
+  this->write_frequency_registers();
 
   ESP_LOGVV(TAG, "configuring modem");
   // Modem configuration for 100 kbps, 2-FSK, 50 kHz deviation
@@ -208,6 +204,14 @@ uint8_t CC1101::get_rx_bytes() {
   return this->read_status_register(CC1101_RXBYTES) & 0x7F;
 }
 
+void CC1101::write_frequency_registers() {
+  // FREQ = (f_carrier * 2^16) / f_xtal
+  uint32_t freq_reg = ((uint64_t)this->frequency_hz_ << 16) / F_XTAL;
+  this->write_register(CC1101_FREQ2, BYTE(freq_reg, 2));
+  this->write_register(CC1101_FREQ1, BYTE(freq_reg, 1));
+  this->write_register(CC1101_FREQ0, BYTE(freq_reg, 0));
+}
+
 optional<uint8_t> CC1101::read() {
   // Check if IRQ pin indicates data available (active low = FIFO threshold reached)
   if (this->irq_pin_->digital_read() == false) {
@@ -247,6 +251,27 @@ void CC1101::restart_rx() {
   this->strobe(CC1101_SFRX);
 
   // Enter RX mode
+  this->strobe(CC1101_SRX);
+  delay(1);
+}
+
+void CC1101::retune_frequency_hz(uint32_t hz) {
+  if (hz == this->frequency_hz_) {
+    this->restart_rx();
+    return;
+  }
+
+  ESP_LOGI(TAG, "Retuning frequency to %.6f MHz", hz / 1e6f);
+  this->frequency_hz_ = hz;
+
+  this->strobe(CC1101_SIDLE);
+  delay(1);
+  this->strobe(CC1101_SFRX);
+
+  this->write_frequency_registers();
+
+  this->strobe(CC1101_SCAL);
+  delay(1);
   this->strobe(CC1101_SRX);
   delay(1);
 }
