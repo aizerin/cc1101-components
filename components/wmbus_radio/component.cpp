@@ -98,8 +98,12 @@ void Radio::receive_frame() {
 
     uint32_t now = millis();
     if (now - this->scan_log_ms_ >= 1000) {
-      ESP_LOGW(TAG, "RSSI scan: floor=%d dBm  peak=%d dBm", this->scan_floor_,
-               this->scan_peak_);
+      // Only log when the strongest sample in the window reaches the threshold,
+      // so the noise floor doesn't spam the log. rssi_threshold default -128 =
+      // log everything; set e.g. -80 to only see real signals.
+      if (this->scan_peak_ >= this->rssi_threshold_)
+        ESP_LOGW(TAG, "RSSI scan: floor=%d dBm  peak=%d dBm", this->scan_floor_,
+                 this->scan_peak_);
       this->scan_log_ms_ = now;
       this->scan_peak_ = -128;
       this->scan_floor_ = 0;
