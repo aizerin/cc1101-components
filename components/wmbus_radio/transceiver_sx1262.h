@@ -466,6 +466,7 @@ public:
   void restart_rx() override;
   int8_t get_rssi() override;
   const char *get_name() override;
+  int8_t get_rssi_inst() override;
   uint16_t get_irq_status();
   // Diagnostics: chip-reported device errors (XOSC/PLL/calib) and status/mode.
   uint16_t get_device_errors();

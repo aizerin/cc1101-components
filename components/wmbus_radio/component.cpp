@@ -86,6 +86,28 @@ void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg) {
 }
 
 void Radio::receive_frame() {
+  // --- RSSI BAND SCANNER: pure energy detector, no sync/decode. Polls the
+  // instantaneous RSSI fast and reports peak/floor once per second. A strong
+  // peak when held near the meter proves antenna + reception work. ---
+  if (this->radio->is_scan_mode()) {
+    int8_t rssi = this->radio->get_rssi_inst();
+    if (rssi > this->scan_peak_)
+      this->scan_peak_ = rssi;
+    if (rssi < this->scan_floor_)
+      this->scan_floor_ = rssi;
+
+    uint32_t now = millis();
+    if (now - this->scan_log_ms_ >= 1000) {
+      ESP_LOGW(TAG, "RSSI scan: floor=%d dBm  peak=%d dBm", this->scan_floor_,
+               this->scan_peak_);
+      this->scan_log_ms_ = now;
+      this->scan_peak_ = -128;
+      this->scan_floor_ = 0;
+    }
+    delay(2);  // ~500 samples/s, catches short bursts
+    return;
+  }
+
   if (!ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(60000))) {
     this->radio->restart_rx();
     return;

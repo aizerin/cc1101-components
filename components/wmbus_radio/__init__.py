@@ -35,6 +35,7 @@ CONF_HAS_TCXO = "has_tcxo"
 CONF_RAW_RX = "raw_rx"
 CONF_RSSI_THRESHOLD = "rssi_threshold"
 CONF_PREAMBLE_DETECT = "preamble_detect"
+CONF_RSSI_SCAN = "rssi_scan"
 
 radio_ns = cg.esphome_ns.namespace("wmbus_radio")
 RadioComponent = radio_ns.class_("Radio", cg.Component)
@@ -123,6 +124,10 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_PREAMBLE_DETECT, default=16): cv.one_of(
                 8, 16, 24, 32, int=True
             ),
+            # Pure RSSI band scanner: ignore wM-Bus entirely, just report the
+            # instantaneous signal level (peak/floor per second). For checking
+            # whether anything is received at all on the frequency.
+            cv.Optional(CONF_RSSI_SCAN, default=False): cv.boolean,
             cv.Optional(CONF_ON_FRAME): automation.validate_automation(
                 {
                     cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(FrameTrigger),
@@ -173,6 +178,9 @@ async def to_code(config):
 
     # Preamble detection length (SX1262)
     cg.add(radio_var.set_preamble_detect_bits(config[CONF_PREAMBLE_DETECT]))
+
+    # RSSI band scanner mode (no wM-Bus, just report signal level)
+    cg.add(radio_var.set_scan_mode(config[CONF_RSSI_SCAN]))
 
     await spi.register_spi_device(radio_var, config)
     await cg.register_component(radio_var, config)

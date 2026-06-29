@@ -45,6 +45,10 @@ protected:
   // Diagnostics: count captured packets to reveal noise flooding (logged at WARN).
   uint32_t capture_count_{0};
   uint32_t last_rate_log_ms_{0};
+  // RSSI band scanner state (peak/floor over a 1s window).
+  int8_t scan_peak_{-128};
+  int8_t scan_floor_{0};
+  uint32_t scan_log_ms_{0};
 
   std::vector<std::function<void(Frame *)>> handlers_;
 };

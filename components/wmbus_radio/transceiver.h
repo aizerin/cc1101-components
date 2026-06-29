@@ -43,7 +43,13 @@ public:
   virtual gpio::InterruptType get_interrupt_type() { return gpio::INTERRUPT_RISING_EDGE; }
   virtual void restart_rx() = 0;
   virtual int8_t get_rssi() = 0;
+  // Instantaneous channel RSSI (for band scanning). Defaults to packet RSSI.
+  virtual int8_t get_rssi_inst() { return this->get_rssi(); }
   virtual const char *get_name() = 0;
+
+  // RSSI scan mode: radio stays in continuous RX, no packet handling.
+  void set_scan_mode(bool enable) { this->scan_mode_ = enable; }
+  bool is_scan_mode() { return this->scan_mode_; }
 
   // Frame-based reading interface
   // Returns number of bytes read (0 if no data available yet)
@@ -76,6 +82,8 @@ protected:
   // Min preamble bits the SX1262 GFSK detector must see before locking (8/16/24/32).
   // Higher = fewer false syncs on noise, but needs a longer real preamble.
   uint8_t preamble_detect_bits_{16};
+  // Pure RSSI band scanner (no sync/decode). For checking antenna/reception.
+  bool scan_mode_{false};
 
   // Byte-by-byte reading interface (used by SX1276) - optional, returns empty if not supported
   virtual optional<uint8_t> read() { return {}; }

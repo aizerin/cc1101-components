@@ -118,7 +118,8 @@ void SX1262::setup() {
   this->spi_command(RADIOLIB_SX126X_CMD_SET_STANDBY, {RADIOLIB_SX126X_STANDBY_XOSC});
 
   ESP_LOGVV(TAG, "setting RX mode");
-  const uint32_t timeout = 0x000000; // 0xFFFFFF;
+  // Scan mode: stay in continuous RX so instantaneous RSSI reflects the channel.
+  const uint32_t timeout = this->scan_mode_ ? 0xFFFFFF : 0x000000;
   this->spi_command(RADIOLIB_SX126X_CMD_SET_RX, {
                     BYTE(timeout, 2), BYTE(timeout, 1), BYTE(timeout, 0)
   });
@@ -196,6 +197,16 @@ void SX1262::restart_rx() {
 
 int8_t SX1262::get_rssi() {
   uint8_t rssi = this->spi_command(RADIOLIB_SX126X_CMD_GET_PACKET_STATUS, {0x00, 0x00, 0x00});
+  return (int8_t)(-rssi / 2);
+}
+
+int8_t SX1262::get_rssi_inst() {
+  this->wait_busy();
+  this->delegate_->begin_transaction();
+  this->delegate_->transfer(RADIOLIB_SX126X_CMD_GET_RSSI_INST);  // 0x15
+  this->delegate_->transfer(0x00);                  // status byte (ignored)
+  uint8_t rssi = this->delegate_->transfer(0x00);   // instantaneous RSSI
+  this->delegate_->end_transaction();
   return (int8_t)(-rssi / 2);
 }
 
