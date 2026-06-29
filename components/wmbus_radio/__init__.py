@@ -33,6 +33,7 @@ CONF_RF_SWITCH = "rf_switch"
 CONF_SYNC_MODE = "sync_mode"
 CONF_HAS_TCXO = "has_tcxo"
 CONF_RAW_RX = "raw_rx"
+CONF_RSSI_THRESHOLD = "rssi_threshold"
 
 radio_ns = cg.esphome_ns.namespace("wmbus_radio")
 RadioComponent = radio_ns.class_("Radio", cg.Component)
@@ -109,6 +110,12 @@ CONFIG_SCHEMA = (
             # Raw RX diagnostic sniffer: dump a fixed window of bytes straight from
             # the radio (hex + RSSI) and skip wM-Bus decoding. For debugging reception.
             cv.Optional(CONF_RAW_RX, default=False): cv.boolean,
+            # Drop captured packets weaker than this RSSI (dBm) before decoding.
+            # Filters out weak noise so only strong (nearby/real) signals proceed.
+            # Default -128 = disabled (accept everything).
+            cv.Optional(CONF_RSSI_THRESHOLD, default=-128): cv.int_range(
+                min=-128, max=0
+            ),
             cv.Optional(CONF_ON_FRAME): automation.validate_automation(
                 {
                     cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(FrameTrigger),
@@ -166,6 +173,9 @@ async def to_code(config):
 
     # Raw RX diagnostic sniffer mode
     cg.add(var.set_raw_rx(config[CONF_RAW_RX]))
+
+    # RSSI threshold filter (drop weak captures before decode)
+    cg.add(var.set_rssi_threshold(config[CONF_RSSI_THRESHOLD]))
 
     await cg.register_component(var, config)
 

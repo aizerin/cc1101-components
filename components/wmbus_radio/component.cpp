@@ -135,6 +135,15 @@ void Radio::receive_frame() {
   int8_t rssi = this->radio->get_rssi();
   packet->set_rssi(rssi);
 
+  // RSSI gate: drop weak captures (noise) so only strong signals proceed to
+  // decoding/queue. Gives priority to nearby/real meter frames.
+  if (rssi < this->rssi_threshold_) {
+    ESP_LOGW(TAG, "DIAG: dropped weak capture [RSSI: %d dBm < threshold %d]", rssi,
+             this->rssi_threshold_);
+    this->radio->restart_rx();
+    return;
+  }
+
   // DIAG: log RSSI of every captured packet (even ones that fail CRC later),
   // so real signal (strong RSSI) can be told apart from noise (noise floor).
   ESP_LOGW(TAG, "DIAG: captured packet [RSSI: %d dBm]", rssi);

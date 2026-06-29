@@ -20,6 +20,9 @@ class Radio : public Component {
 public:
   void set_radio(RadioTransceiver *radio) { this->radio = radio; };
   void set_raw_rx(bool raw_rx) { this->raw_rx_ = raw_rx; };
+  void set_rssi_threshold(int8_t rssi_threshold) {
+    this->rssi_threshold_ = rssi_threshold;
+  };
 
   void setup() override;
   void loop() override;
@@ -37,6 +40,8 @@ protected:
 
   // Raw RX diagnostic sniffer: dump bytes straight from radio, skip decoding.
   bool raw_rx_{false};
+  // Drop captures weaker than this RSSI (dBm). -128 = disabled.
+  int8_t rssi_threshold_{-128};
   // Diagnostics: count captured packets to reveal noise flooding (logged at WARN).
   uint32_t capture_count_{0};
   uint32_t last_rate_log_ms_{0};

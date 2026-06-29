@@ -41,12 +41,13 @@ void SX1262::setup() {
   ESP_LOGVV(TAG, "setting packet parameters");
   this->spi_command(RADIOLIB_SX126X_CMD_SET_PACKET_PARAMS, {
                     BYTE(16, 1), BYTE(16, 0),   // Preamble length
-                    // Require 16 preamble bits before lock (was 8). wM-Bus T1/C1
-                    // has a long preamble, so this is safe, but it sharply cuts
-                    // false syncs on noise (each extra required bit ~halves them),
-                    // which keeps the radio from getting stuck reading noise.
-                    // Bump to _24 if noise is still flooding the log.
-                    RADIOLIB_SX126X_GFSK_PREAMBLE_DETECT_16,
+                    // Require 24 preamble bits before lock (was 8, then 16).
+                    // wM-Bus T1/C1 has a long preamble, so this is safe, but it
+                    // sharply cuts false syncs on noise (each extra required bit
+                    // ~halves them), so the radio doesn't get stuck reading noise
+                    // and stays available for the real meter frame.
+                    // Max is _32 if noise still needs cutting.
+                    RADIOLIB_SX126X_GFSK_PREAMBLE_DETECT_24,
                     16,                         // Sync word bit length
                     RADIOLIB_SX126X_GFSK_ADDRESS_FILT_OFF,
                     RADIOLIB_SX126X_GFSK_PACKET_FIXED,
