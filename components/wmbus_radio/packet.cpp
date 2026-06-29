@@ -69,6 +69,12 @@ size_t Packet::expected_size() {
       this->expected_size_ = WMBUS_MODE_C_SUFIX_LEN + nrBytes;
     else if (this->data_[1] == WMBUS_BLOCK_B_PREAMBLE)
       this->expected_size_ = WMBUS_MODE_C_SUFIX_LEN + 1 + l_field;
+
+    // DIAG: l_field==0 + expected_size==8 is the tell-tale sign of a failed
+    // 3-of-6 decode on noise (see decode3of6 / l_field()).
+    ESP_LOGW(TAG, "DIAG size: mode=%s l_field=%u nrBlocks=%u nrBytes=%u expected=%zu",
+             this->link_mode() == LinkMode::C1 ? "C1" : "T1", l_field, nrBlocks,
+             nrBytes, this->expected_size_);
   }
   ESP_LOGV(TAG, "expected_size: %zu", this->expected_size_);
   return this->expected_size_;
@@ -96,6 +102,11 @@ std::optional<Frame> Packet::convert_to_frame() {
 
   ESP_LOGD(TAG, "Have data from radio (%zu bytes)", this->data_.size());
   debugPayload("raw packet", this->data_);
+
+  // DIAG (WARN so it shows without VERBOSE): full captured payload + detected mode.
+  ESP_LOGW(TAG, "DIAG convert: %zu bytes, mode=%s, hex=%s", this->data_.size(),
+           this->link_mode() == LinkMode::C1 ? "C1" : "T1",
+           format_hex(this->data_).c_str());
 
   if (this->expected_size() == this->data_.size()) {
     if (this->link_mode() == LinkMode::T1) {
@@ -128,8 +139,15 @@ std::optional<Frame> Packet::convert_to_frame() {
   }
 
   int dummy;
-  if (crcOk && (checkWMBusFrame(this->data_, (size_t *)&dummy, &dummy, &dummy, false) ==
-      FrameStatus::FullFrame))
+  bool fullFrame = crcOk &&
+                   (checkWMBusFrame(this->data_, (size_t *)&dummy, &dummy, &dummy,
+                                    false) == FrameStatus::FullFrame);
+  // DIAG: tell us exactly where a capture is rejected (format/CRC/frame check).
+  ESP_LOGW(TAG, "DIAG result: format=%s crcOk=%d fullFrame=%d -> %s",
+           this->frame_format_.c_str(), crcOk, fullFrame,
+           fullFrame ? "ACCEPTED" : "REJECTED");
+
+  if (fullFrame)
     frame.emplace(this);
 
   delete this;

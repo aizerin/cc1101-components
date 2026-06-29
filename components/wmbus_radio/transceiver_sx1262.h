@@ -467,6 +467,10 @@ public:
   int8_t get_rssi() override;
   const char *get_name() override;
   uint16_t get_irq_status();
+  // Diagnostics: chip-reported device errors (XOSC/PLL/calib) and status/mode.
+  uint16_t get_device_errors();
+  uint8_t get_status();
+  void log_health(const char *context);
 protected:
   uint8_t offset;
 };

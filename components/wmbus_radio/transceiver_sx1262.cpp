@@ -41,7 +41,12 @@ void SX1262::setup() {
   ESP_LOGVV(TAG, "setting packet parameters");
   this->spi_command(RADIOLIB_SX126X_CMD_SET_PACKET_PARAMS, {
                     BYTE(16, 1), BYTE(16, 0),   // Preamble length
-                    RADIOLIB_SX126X_GFSK_PREAMBLE_DETECT_8,
+                    // Require 16 preamble bits before lock (was 8). wM-Bus T1/C1
+                    // has a long preamble, so this is safe, but it sharply cuts
+                    // false syncs on noise (each extra required bit ~halves them),
+                    // which keeps the radio from getting stuck reading noise.
+                    // Bump to _24 if noise is still flooding the log.
+                    RADIOLIB_SX126X_GFSK_PREAMBLE_DETECT_16,
                     16,                         // Sync word bit length
                     RADIOLIB_SX126X_GFSK_ADDRESS_FILT_OFF,
                     RADIOLIB_SX126X_GFSK_PACKET_FIXED,
@@ -118,6 +123,10 @@ void SX1262::setup() {
 
   this->offset = 0;
 
+  // DIAG: confirm the radio actually reached RX and report any chip errors
+  // (e.g. XOSC failed to start, PLL/calibration errors). Logged at WARN.
+  this->log_health("post-setup");
+
   ESP_LOGV(TAG, "SX1262 setup done");
 }
 
@@ -189,6 +198,43 @@ int8_t SX1262::get_rssi() {
 }
 
 const char *SX1262::get_name() { return TAG; }
+
+uint16_t SX1262::get_device_errors() {
+  this->wait_busy();
+  this->delegate_->begin_transaction();
+  this->delegate_->transfer(RADIOLIB_SX126X_CMD_GET_DEVICE_ERRORS);
+  this->delegate_->transfer(0x00);             // status byte (ignored)
+  uint8_t msb = this->delegate_->transfer(0x00);
+  uint8_t lsb = this->delegate_->transfer(0x00);
+  this->delegate_->end_transaction();
+  return (uint16_t(msb) << 8) | lsb;
+}
+
+uint8_t SX1262::get_status() {
+  this->wait_busy();
+  this->delegate_->begin_transaction();
+  this->delegate_->transfer(RADIOLIB_SX126X_CMD_GET_STATUS);
+  uint8_t status = this->delegate_->transfer(0x00);  // status returned on next byte
+  this->delegate_->end_transaction();
+  return status;
+}
+
+void SX1262::log_health(const char *context) {
+  uint8_t status = this->get_status();
+  uint16_t errors = this->get_device_errors();
+
+  uint8_t mode = (status >> 4) & 0x07;
+  const char *mode_str =
+      mode == 0x2 ? "STDBY_RC" : mode == 0x3 ? "STDBY_XOSC"
+                             : mode == 0x4   ? "FS"
+                             : mode == 0x5   ? "RX"
+                             : mode == 0x6   ? "TX"
+                                             : "?";
+
+  ESP_LOGW(TAG, "DIAG health (%s): status=0x%02X mode=%s device_errors=0x%04X%s",
+           context, status, mode_str, errors,
+           errors ? "  <<< CHIP ERRORS!" : "");
+}
 
 uint16_t SX1262::get_irq_status() {
   uint8_t status[3] = {0};

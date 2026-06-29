@@ -1,5 +1,8 @@
 #include "component.h"
 
+#include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
+
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
@@ -88,6 +91,30 @@ void Radio::receive_frame() {
     return;
   }
 
+  // --- DIAGNOSTICS: capture-rate counter (WARN so it shows without VERBOSE) ---
+  // A high rate here means the radio is constantly tripping on noise, which
+  // keeps it busy/blind and can starve real frames.
+  this->capture_count_++;
+  uint32_t now = millis();
+  if (now - this->last_rate_log_ms_ >= 5000) {
+    ESP_LOGW(TAG, "DIAG: %u RX captures in last %u ms", this->capture_count_,
+             now - this->last_rate_log_ms_);
+    this->last_rate_log_ms_ = now;
+    this->capture_count_ = 0;
+  }
+
+  // --- RAW RX sniffer: dump a fixed window straight from the radio and bail out
+  // before any wM-Bus decoding. Lets us see what actually arrives + RSSI. ---
+  if (this->raw_rx_) {
+    uint8_t buf[32] = {0};
+    bool ok = this->radio->read_in_task(buf, sizeof(buf), 0);
+    int8_t rssi = this->radio->get_rssi();
+    ESP_LOGW(TAG, "RAW RX [rssi=%d dBm, read_ok=%d]: %s", rssi, ok,
+             format_hex(buf, sizeof(buf)).c_str());
+    this->radio->restart_rx();
+    return;
+  }
+
   auto packet = std::make_unique<Packet>();
 
   if (!this->radio->read_in_task(packet->rx_data_ptr(), packet->rx_capacity(), 0)) {
@@ -105,7 +132,12 @@ void Radio::receive_frame() {
     return;
   }
 
-  packet->set_rssi(this->radio->get_rssi());
+  int8_t rssi = this->radio->get_rssi();
+  packet->set_rssi(rssi);
+
+  // DIAG: log RSSI of every captured packet (even ones that fail CRC later),
+  // so real signal (strong RSSI) can be told apart from noise (noise floor).
+  ESP_LOGW(TAG, "DIAG: captured packet [RSSI: %d dBm]", rssi);
 
   // Re-arm sync word detector for next packet
   this->radio->restart_rx();

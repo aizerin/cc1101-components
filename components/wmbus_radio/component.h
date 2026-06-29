@@ -19,6 +19,7 @@ namespace wmbus_radio {
 class Radio : public Component {
 public:
   void set_radio(RadioTransceiver *radio) { this->radio = radio; };
+  void set_raw_rx(bool raw_rx) { this->raw_rx_ = raw_rx; };
 
   void setup() override;
   void loop() override;
@@ -33,6 +34,12 @@ protected:
   RadioTransceiver *radio{nullptr};
   TaskHandle_t receiver_task_handle_{nullptr};
   QueueHandle_t packet_queue_{nullptr};
+
+  // Raw RX diagnostic sniffer: dump bytes straight from radio, skip decoding.
+  bool raw_rx_{false};
+  // Diagnostics: count captured packets to reveal noise flooding (logged at WARN).
+  uint32_t capture_count_{0};
+  uint32_t last_rate_log_ms_{0};
 
   std::vector<std::function<void(Frame *)>> handlers_;
 };

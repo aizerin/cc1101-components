@@ -32,6 +32,7 @@ CONF_RX_GAIN = "rx_gain"
 CONF_RF_SWITCH = "rf_switch"
 CONF_SYNC_MODE = "sync_mode"
 CONF_HAS_TCXO = "has_tcxo"
+CONF_RAW_RX = "raw_rx"
 
 radio_ns = cg.esphome_ns.namespace("wmbus_radio")
 RadioComponent = radio_ns.class_("Radio", cg.Component)
@@ -105,6 +106,9 @@ CONFIG_SCHEMA = (
             ),
             # Use DIO3 to drive an external TCXO (SX1262 only, default: True)
             cv.Optional(CONF_HAS_TCXO, default=True): cv.boolean,
+            # Raw RX diagnostic sniffer: dump a fixed window of bytes straight from
+            # the radio (hex + RSSI) and skip wM-Bus decoding. For debugging reception.
+            cv.Optional(CONF_RAW_RX, default=False): cv.boolean,
             cv.Optional(CONF_ON_FRAME): automation.validate_automation(
                 {
                     cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(FrameTrigger),
@@ -159,6 +163,9 @@ async def to_code(config):
     cg.add(cg.LineComment("WMBus Component"))
     var = cg.new_Pvariable(config[CONF_ID])
     cg.add(var.set_radio(radio_var))
+
+    # Raw RX diagnostic sniffer mode
+    cg.add(var.set_raw_rx(config[CONF_RAW_RX]))
 
     await cg.register_component(var, config)
 
