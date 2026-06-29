@@ -19,8 +19,9 @@ void SX1262::setup() {
   ESP_LOGVV(TAG, "setting packet type");
   this->spi_command(RADIOLIB_SX126X_CMD_SET_PACKET_TYPE, {RADIOLIB_SX126X_PACKET_TYPE_GFSK});
 
-  ESP_LOGVV(TAG, "setting radio frequency");
-  const float frequency = 868.950;
+  // Use the frequency from YAML (default 868.95 MHz) instead of a hardcoded value.
+  const float frequency = this->frequency_hz_ / 1e6f;
+  ESP_LOGW(TAG, "DIAG: setting radio frequency to %.3f MHz", frequency);
   const uint32_t frf = (frequency * (uint32_t(1) << RADIOLIB_SX126X_DIV_EXPONENT)) / RADIOLIB_SX126X_CRYSTAL_FREQ;
   this->spi_command(RADIOLIB_SX126X_CMD_SET_RF_FREQUENCY, {
                     BYTE(frf, 3), BYTE(frf, 2), BYTE(frf, 1), BYTE(frf, 0)});
@@ -39,15 +40,15 @@ void SX1262::setup() {
   });
 
   ESP_LOGVV(TAG, "setting packet parameters");
+  // Map configured preamble-detect bits (8/16/24/32) to the register value.
+  // Reg values: _8=0x04, _16=0x05, _24=0x06, _32=0x07  ->  reg = 0x03 + bits/8.
+  // Higher = fewer false syncs on noise; wM-Bus has a long preamble so it's safe.
+  uint8_t preamble_detect = 0x03 + (this->preamble_detect_bits_ / 8);
+  ESP_LOGW(TAG, "DIAG: preamble detect = %u bits (reg 0x%02X)",
+           this->preamble_detect_bits_, preamble_detect);
   this->spi_command(RADIOLIB_SX126X_CMD_SET_PACKET_PARAMS, {
                     BYTE(16, 1), BYTE(16, 0),   // Preamble length
-                    // Require 24 preamble bits before lock (was 8, then 16).
-                    // wM-Bus T1/C1 has a long preamble, so this is safe, but it
-                    // sharply cuts false syncs on noise (each extra required bit
-                    // ~halves them), so the radio doesn't get stuck reading noise
-                    // and stays available for the real meter frame.
-                    // Max is _32 if noise still needs cutting.
-                    RADIOLIB_SX126X_GFSK_PREAMBLE_DETECT_24,
+                    preamble_detect,
                     16,                         // Sync word bit length
                     RADIOLIB_SX126X_GFSK_ADDRESS_FILT_OFF,
                     RADIOLIB_SX126X_GFSK_PACKET_FIXED,

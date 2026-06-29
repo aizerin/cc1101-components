@@ -34,6 +34,7 @@ CONF_SYNC_MODE = "sync_mode"
 CONF_HAS_TCXO = "has_tcxo"
 CONF_RAW_RX = "raw_rx"
 CONF_RSSI_THRESHOLD = "rssi_threshold"
+CONF_PREAMBLE_DETECT = "preamble_detect"
 
 radio_ns = cg.esphome_ns.namespace("wmbus_radio")
 RadioComponent = radio_ns.class_("Radio", cg.Component)
@@ -116,6 +117,12 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_RSSI_THRESHOLD, default=-128): cv.int_range(
                 min=-128, max=0
             ),
+            # Min preamble bits the SX1262 must see before locking onto a packet.
+            # Higher = fewer false syncs on noise; lower = locks more easily (good
+            # for proving the radio is listening). One of 8/16/24/32.
+            cv.Optional(CONF_PREAMBLE_DETECT, default=16): cv.one_of(
+                8, 16, 24, 32, int=True
+            ),
             cv.Optional(CONF_ON_FRAME): automation.validate_automation(
                 {
                     cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(FrameTrigger),
@@ -163,6 +170,9 @@ async def to_code(config):
 
     # TCXO via DIO3
     cg.add(radio_var.set_tcxo(config[CONF_HAS_TCXO]))
+
+    # Preamble detection length (SX1262)
+    cg.add(radio_var.set_preamble_detect_bits(config[CONF_PREAMBLE_DETECT]))
 
     await spi.register_spi_device(radio_var, config)
     await cg.register_component(radio_var, config)

@@ -62,6 +62,7 @@ public:
   void set_rf_switch(bool enable);
   void set_sync_mode(const std::string &mode);
   void set_tcxo(bool enable);
+  void set_preamble_detect_bits(uint8_t bits);
 
 protected:
   GPIOPin *reset_pin_{nullptr};
@@ -72,6 +73,9 @@ protected:
   bool rf_switch_{false};  // Use DIO2 as RF switch control (SX1262)
   SyncMode sync_mode_{SYNC_MODE_NORMAL};
   bool has_tcxo_{true}; // Use DIO3 as driver for temperature-compensated crystal oscillator
+  // Min preamble bits the SX1262 GFSK detector must see before locking (8/16/24/32).
+  // Higher = fewer false syncs on noise, but needs a longer real preamble.
+  uint8_t preamble_detect_bits_{16};
 
   // Byte-by-byte reading interface (used by SX1276) - optional, returns empty if not supported
   virtual optional<uint8_t> read() { return {}; }
