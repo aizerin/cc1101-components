@@ -16,6 +16,22 @@ void SX1262::setup() {
   ESP_LOGVV(TAG, "setting Standby mode");
   this->spi_command(RADIOLIB_SX126X_CMD_SET_STANDBY, {RADIOLIB_SX126X_STANDBY_RC});
 
+  // Regulator: DC-DC, matching the manufacturer DX-LR30 reference (UserConfig.c
+  // uses SX126X_REG_MODE_DCDC). The module has the DC-DC inductor.
+  ESP_LOGVV(TAG, "setting regulator mode DC-DC");
+  this->spi_command(RADIOLIB_SX126X_CMD_SET_REGULATOR_MODE, {RADIOLIB_SX126X_REGULATOR_DC_DC});
+
+  // Crystal load-capacitor trim from the manufacturer DX-LR30 reference
+  // (sx126x_set_trimming_capacitor_values(0x04, 0x2f)). Only relevant on a
+  // crystal (no-TCXO) board: sets the correct 32 MHz reference so the RF
+  // frequency is not offset. Writes XTA_TRIM=0x04 (0x0911) and XTB_TRIM=0x2f.
+  if (!this->has_tcxo_) {
+    ESP_LOGW(TAG, "DIAG: applying crystal trim XTA=0x04 XTB=0x2F (no TCXO)");
+    this->spi_command(RADIOLIB_SX126X_CMD_WRITE_REGISTER, {
+                      BYTE(RADIOLIB_SX126X_REG_XTA_TRIM, 1), BYTE(RADIOLIB_SX126X_REG_XTA_TRIM, 0),
+                      0x04, 0x2F});
+  }
+
   ESP_LOGVV(TAG, "setting packet type");
   this->spi_command(RADIOLIB_SX126X_CMD_SET_PACKET_TYPE, {RADIOLIB_SX126X_PACKET_TYPE_GFSK});
 
